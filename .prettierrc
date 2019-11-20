@@ -4,6 +4,5 @@
   "trailingComma": "es5",
   "svelteSortOrder" : "styles-scripts-markup",
   "svelteStrictMode": true,
-  "allowShorthand": false,
-  "plugins": ["prettier-plugin-svelte"]
+  "allowShorthand": false
 }
