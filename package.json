@@ -2,11 +2,13 @@
   "name": "svelte-app",
   "version": "1.0.0",
   "devDependencies": {
+    "audio-recorder-polyfill": "0.1.6",
     "eslint": "6.6.0",
     "eslint-config-airbnb-base": "14.0.0",
     "eslint-config-prettier": "6.7.0",
     "eslint-plugin-prettier": "3.1.1",
     "eslint-plugin-svelte3": "2.7.3",
+    "firebase": "7.4.0",
     "husky": "3.1.0",
     "lint-staged": "9.4.3",
     "prettier": "1.19.1",
