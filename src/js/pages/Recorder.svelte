@@ -32,6 +32,10 @@
   function onValid() {
     appStatus = 'SUCCESS';
   }
+
+  function onInvalid() {
+    appStatus = 'START';
+  }
 </script>
 
 <section class="recorder">

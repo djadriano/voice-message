@@ -16,7 +16,9 @@
   // -----------------------------------------------
 
   import { createEventDispatcher } from 'svelte';
+  import { recorder } from '../utils/store.js';
   import AudioRecorder from 'audio-recorder-polyfill';
+  import Counter from './Counter.svelte';
 
   // -----------------------------------------------
   // Constants
@@ -33,22 +35,35 @@
   // -----------------------------------------------
 
   let mediaRecorder = '';
-  let recordingStatus = 'start';
   let buttonLabel = {
-    start: 'Start record',
-    started: 'Stop record',
+    START: 'Start record',
+    STARTED: 'Stop record',
   };
+  let store = $recorder;
 
   // -----------------------------------------------
   // Methods
   // -----------------------------------------------
 
+  recorder.subscribe(value => {
+    store = value;
+  });
+
   function toggleRecord() {
-    recordingStatus === 'start' ? start() : stop();
+    const { status } = store;
+
+    status === 'START' ? start() : stop();
+  }
+
+  function setDataStore(data) {
+    recorder.set(data);
   }
 
   async function start() {
-    recordingStatus = 'started';
+    setDataStore({
+      ...$recorder,
+      status: 'STARTED',
+    });
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -67,8 +82,12 @@
   }
 
   function stop() {
-    recordingStatus = 'start';
     mediaRecorder.stop();
+
+    setDataStore({
+      ...$recorder,
+      status: 'STOP',
+    });
   }
 
   function stopBrowserMic() {
@@ -77,9 +96,8 @@
 </script>
 
 <section>
-  <button
-    on:click="{toggleRecord}"
-    class:active="{recordingStatus === 'started'}">
-    {buttonLabel[recordingStatus]}
+  <button on:click="{toggleRecord}" class:active="{store.status === 'STARTED'}">
+    {buttonLabel[store.status]}
   </button>
+  <Counter on:stop="{stop}" recorderStatus="{store.status}" />
 </section>

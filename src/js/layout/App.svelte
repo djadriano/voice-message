@@ -18,6 +18,7 @@
   // -----------------------------------------------
 
   let userData = $user;
+  const { logged, displayName, photoURL } = userData;
 
   // -----------------------------------------------
   // Store listeners
@@ -29,8 +30,8 @@
 </script>
 
 <main>
-  {#if userData.logged}
-    <Header name="{userData.displayName}" photo="{userData.photoURL}" />
+  {#if logged}
+    <Header name="{displayName}" photo="{photoURL}" />
     <RecorderPage />
   {:else}
     <LoginPage />
