@@ -42,12 +42,16 @@
   let store = $recorder;
 
   // -----------------------------------------------
-  // Methods
+  // Store listener
   // -----------------------------------------------
 
   recorder.subscribe(value => {
     store = value;
   });
+
+  // -----------------------------------------------
+  // Methods
+  // -----------------------------------------------
 
   function toggleRecord() {
     const { status } = store;
@@ -77,7 +81,13 @@
   }
 
   function hasMediaData(evt) {
-    dispatch('finish', evt.data);
+    const file = evt.data;
+
+    setDataStore({
+      ...$recorder,
+      file,
+    });
+    dispatch('finish', file);
     setTimeout(stopBrowserMic, 1000);
   }
 

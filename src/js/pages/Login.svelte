@@ -7,6 +7,7 @@
   // Imports
   // -----------------------------------------------
 
+  import { navigate } from 'svelte-routing';
   import { auth, googleProvider } from '../utils/firebase';
   import { user } from '../utils/store.js';
 
@@ -28,6 +29,8 @@
           displayName,
           email,
         });
+
+        navigate('/recorder');
       }
     } catch (error) {
       console.log(error);

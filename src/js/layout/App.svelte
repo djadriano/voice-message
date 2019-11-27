@@ -8,32 +8,39 @@
   // -----------------------------------------------
   // Imports
   // -----------------------------------------------
+
+  import { Router, Route } from 'svelte-routing';
   import { user } from '../utils/store.js';
   import Header from '../components/Header.svelte';
   import LoginPage from '../pages/Login.svelte';
   import RecorderPage from '../pages/Recorder.svelte';
+  import PreviewPage from '../pages/Preview.svelte';
+  import SuccessPage from '../pages/Success.svelte';
 
   // -----------------------------------------------
   // State variables
   // -----------------------------------------------
 
-  let userData = $user;
-  const { logged, displayName, photoURL } = userData;
+  export let url = '';
+  let store = $user;
 
   // -----------------------------------------------
-  // Store listeners
+  // Store listener
   // -----------------------------------------------
 
   user.subscribe(value => {
-    userData = value;
+    store = value;
   });
 </script>
 
 <main>
-  {#if logged}
-    <Header name="{displayName}" photo="{photoURL}" />
-    <RecorderPage />
-  {:else}
-    <LoginPage />
-  {/if}
+  <Router {url}>
+    {#if store.logged}
+      <Header name="{store.displayName}" photo="{store.photoURL}" />
+    {/if}
+    <Route path="success" component="{SuccessPage}" />
+    <Route path="preview" component="{PreviewPage}" />
+    <Route path="recorder" component="{RecorderPage}" />
+    <Route path="/" component="{LoginPage}" />
+  </Router>
 </main>

@@ -8,4 +8,5 @@ export const USER_STORE = {
 export const RECORDER_STORE = {
   status: 'START',
   file: null,
+  approved: false,
 };

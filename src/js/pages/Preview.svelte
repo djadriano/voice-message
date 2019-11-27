@@ -7,31 +7,33 @@
   // Imports
   // -----------------------------------------------
 
-  import { createEventDispatcher } from 'svelte';
+  import { navigate } from 'svelte-routing';
+  import { recorder } from '../utils/store.js';
+  import { RECORDER_STORE } from '../utils/constants.js';
 
   // -----------------------------------------------
   // State variables
   // -----------------------------------------------
 
-  export let file = '';
+  let store = $recorder;
 
   // -----------------------------------------------
   // Constants
   // -----------------------------------------------
 
-  const dispatch = createEventDispatcher();
-  const urlFile = window.URL.createObjectURL(file);
+  const urlFile = window.URL.createObjectURL(store.file);
 
   // -----------------------------------------------
   // Methods
   // -----------------------------------------------
 
   function approveSound() {
-    dispatch('valid');
+    navigate('success');
   }
 
   function declineSound() {
-    dispatch('invalid');
+    recorder.set(RECORDER_STORE);
+    navigate('recorder');
   }
 </script>
 
