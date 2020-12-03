@@ -39,22 +39,13 @@
     START: 'Start record',
     STARTED: 'Stop record',
   };
-  let store = $recorder;
-
-  // -----------------------------------------------
-  // Store listener
-  // -----------------------------------------------
-
-  recorder.subscribe(value => {
-    store = value;
-  });
 
   // -----------------------------------------------
   // Methods
   // -----------------------------------------------
 
   function toggleRecord() {
-    const { status } = store;
+    const { status } = $recorder;
 
     status === 'START' ? start() : stop();
   }
@@ -106,8 +97,8 @@
 </script>
 
 <section>
-  <button on:click="{toggleRecord}" class:active="{store.status === 'STARTED'}">
-    {buttonLabel[store.status]}
+  <button on:click="{toggleRecord}" class:active="{$recorder.status === 'STARTED'}">
+    {buttonLabel[$recorder.status]}
   </button>
-  <Counter on:stop="{stop}" recorderStatus="{store.status}" />
+  <Counter on:stop="{stop}" recorderStatus="{$recorder.status}" />
 </section>
