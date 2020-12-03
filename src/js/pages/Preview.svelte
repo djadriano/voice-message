@@ -12,16 +12,10 @@
   import { RECORDER_STORE } from '../utils/constants.js';
 
   // -----------------------------------------------
-  // State variables
-  // -----------------------------------------------
-
-  let store = $recorder;
-
-  // -----------------------------------------------
   // Constants
   // -----------------------------------------------
 
-  const urlFile = window.URL.createObjectURL(store.file);
+  const urlFile = window.URL.createObjectURL($recorder.file);
 
   // -----------------------------------------------
   // Methods

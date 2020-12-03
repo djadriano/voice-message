@@ -22,21 +22,12 @@
   // -----------------------------------------------
 
   export let url = '';
-  let store = $user;
-
-  // -----------------------------------------------
-  // Store listener
-  // -----------------------------------------------
-
-  user.subscribe(value => {
-    store = value;
-  });
 </script>
 
 <main>
   <Router {url}>
-    {#if store.logged}
-      <Header name="{store.displayName}" photo="{store.photoURL}" />
+    {#if $user.logged}
+      <Header name="{$user.displayName}" photo="{$user.photoURL}" />
     {/if}
     <Route path="success" component="{SuccessPage}" />
     <Route path="preview" component="{PreviewPage}" />
