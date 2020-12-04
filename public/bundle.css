@@ -1,7 +1,7 @@
 main.svelte-1tv9nbq{position:relative}
 .recorder.svelte-27dquv{position:relative}
-img.svelte-1eijwst{width:100px;height:100px}
-button.svelte-adujy3{background:green;color:white;border:0}button.active.svelte-adujy3{background:red}
+figure.svelte-usidtf{width:100px;height:100px;border:1px solid}
+button.svelte-v4yyb1{background:green;color:white;border:0}button.active.svelte-v4yyb1{background:red;animation:svelte-v4yyb1-foo 250ms infinite}@keyframes svelte-v4yyb1-foo{from{background:green}to{background:red}}
 time.svelte-1yff1od{border:1px solid}
 
 /*# sourceMappingURL=bundle.css.map */

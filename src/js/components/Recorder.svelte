@@ -7,6 +7,16 @@
 
   button.active {
     background: red;
+    animation: foo 250ms infinite;
+  }
+
+  @keyframes foo {
+    from {
+      background: green;
+    }
+    to {
+      background: red;
+    }
   }
 </style>
 
@@ -50,12 +60,8 @@
     status === 'START' ? start() : stop();
   }
 
-  function setDataStore(data) {
-    recorder.set(data);
-  }
-
   async function start() {
-    setDataStore({
+    recorder.set({
       ...$recorder,
       status: 'STARTED',
     });
@@ -74,10 +80,11 @@
   function hasMediaData(evt) {
     const file = evt.data;
 
-    setDataStore({
+    recorder.set({
       ...$recorder,
       file,
     });
+
     dispatch('finish', file);
     setTimeout(stopBrowserMic, 1000);
   }
@@ -85,7 +92,7 @@
   function stop() {
     mediaRecorder.stop();
 
-    setDataStore({
+    recorder.set({
       ...$recorder,
       status: 'STOP',
     });

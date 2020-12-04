@@ -4,6 +4,7 @@ var app = (function () {
     'use strict';
 
     function noop() { }
+    const identity = x => x;
     function assign(tar, src) {
         // @ts-ignore
         for (const k in src)
@@ -66,6 +67,41 @@ var app = (function () {
         return result;
     }
 
+    const is_client = typeof window !== 'undefined';
+    let now = is_client
+        ? () => window.performance.now()
+        : () => Date.now();
+    let raf = is_client ? cb => requestAnimationFrame(cb) : noop;
+
+    const tasks = new Set();
+    let running = false;
+    function run_tasks() {
+        tasks.forEach(task => {
+            if (!task[0](now())) {
+                tasks.delete(task);
+                task[1]();
+            }
+        });
+        running = tasks.size > 0;
+        if (running)
+            raf(run_tasks);
+    }
+    function loop(fn) {
+        let task;
+        if (!running) {
+            running = true;
+            raf(run_tasks);
+        }
+        return {
+            promise: new Promise(fulfil => {
+                tasks.add(task = [fn, fulfil]);
+            }),
+            abort() {
+                tasks.delete(task);
+            }
+        };
+    }
+
     function append(target, node) {
         target.appendChild(node);
     }
@@ -107,6 +143,62 @@ var app = (function () {
         const e = document.createEvent('CustomEvent');
         e.initCustomEvent(type, false, false, detail);
         return e;
+    }
+
+    let stylesheet;
+    let active = 0;
+    let current_rules = {};
+    // https://github.com/darkskyapp/string-hash/blob/master/index.js
+    function hash(str) {
+        let hash = 5381;
+        let i = str.length;
+        while (i--)
+            hash = ((hash << 5) - hash) ^ str.charCodeAt(i);
+        return hash >>> 0;
+    }
+    function create_rule(node, a, b, duration, delay, ease, fn, uid = 0) {
+        const step = 16.666 / duration;
+        let keyframes = '{\n';
+        for (let p = 0; p <= 1; p += step) {
+            const t = a + (b - a) * ease(p);
+            keyframes += p * 100 + `%{${fn(t, 1 - t)}}\n`;
+        }
+        const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
+        const name = `__svelte_${hash(rule)}_${uid}`;
+        if (!current_rules[name]) {
+            if (!stylesheet) {
+                const style = element('style');
+                document.head.appendChild(style);
+                stylesheet = style.sheet;
+            }
+            current_rules[name] = true;
+            stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
+        }
+        const animation = node.style.animation || '';
+        node.style.animation = `${animation ? `${animation}, ` : ``}${name} ${duration}ms linear ${delay}ms 1 both`;
+        active += 1;
+        return name;
+    }
+    function delete_rule(node, name) {
+        node.style.animation = (node.style.animation || '')
+            .split(', ')
+            .filter(name
+            ? anim => anim.indexOf(name) < 0 // remove specific animation
+            : anim => anim.indexOf('__svelte') === -1 // remove all Svelte animations
+        )
+            .join(', ');
+        if (name && !--active)
+            clear_rules();
+    }
+    function clear_rules() {
+        raf(() => {
+            if (active)
+                return;
+            let i = stylesheet.cssRules.length;
+            while (i--)
+                stylesheet.deleteRule(i);
+            current_rules = {};
+        });
     }
 
     let current_component;
@@ -199,6 +291,20 @@ var app = (function () {
             $$.after_update.forEach(add_render_callback);
         }
     }
+
+    let promise;
+    function wait() {
+        if (!promise) {
+            promise = Promise.resolve();
+            promise.then(() => {
+                promise = null;
+            });
+        }
+        return promise;
+    }
+    function dispatch(node, direction, kind) {
+        node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
+    }
     const outroing = new Set();
     let outros;
     function group_outros() {
@@ -235,6 +341,112 @@ var app = (function () {
             });
             block.o(local);
         }
+    }
+    const null_transition = { duration: 0 };
+    function create_bidirectional_transition(node, fn, params, intro) {
+        let config = fn(node, params);
+        let t = intro ? 0 : 1;
+        let running_program = null;
+        let pending_program = null;
+        let animation_name = null;
+        function clear_animation() {
+            if (animation_name)
+                delete_rule(node, animation_name);
+        }
+        function init(program, duration) {
+            const d = program.b - t;
+            duration *= Math.abs(d);
+            return {
+                a: t,
+                b: program.b,
+                d,
+                duration,
+                start: program.start,
+                end: program.start + duration,
+                group: program.group
+            };
+        }
+        function go(b) {
+            const { delay = 0, duration = 300, easing = identity, tick = noop, css } = config || null_transition;
+            const program = {
+                start: now() + delay,
+                b
+            };
+            if (!b) {
+                // @ts-ignore todo: improve typings
+                program.group = outros;
+                outros.r += 1;
+            }
+            if (running_program) {
+                pending_program = program;
+            }
+            else {
+                // if this is an intro, and there's a delay, we need to do
+                // an initial tick and/or apply CSS animation immediately
+                if (css) {
+                    clear_animation();
+                    animation_name = create_rule(node, t, b, duration, delay, easing, css);
+                }
+                if (b)
+                    tick(0, 1);
+                running_program = init(program, duration);
+                add_render_callback(() => dispatch(node, b, 'start'));
+                loop(now => {
+                    if (pending_program && now > pending_program.start) {
+                        running_program = init(pending_program, duration);
+                        pending_program = null;
+                        dispatch(node, running_program.b, 'start');
+                        if (css) {
+                            clear_animation();
+                            animation_name = create_rule(node, t, running_program.b, running_program.duration, 0, easing, config.css);
+                        }
+                    }
+                    if (running_program) {
+                        if (now >= running_program.end) {
+                            tick(t = running_program.b, 1 - t);
+                            dispatch(node, running_program.b, 'end');
+                            if (!pending_program) {
+                                // we're done
+                                if (running_program.b) {
+                                    // intro — we can tidy up immediately
+                                    clear_animation();
+                                }
+                                else {
+                                    // outro — needs to be coordinated
+                                    if (!--running_program.group.r)
+                                        run_all(running_program.group.c);
+                                }
+                            }
+                            running_program = null;
+                        }
+                        else if (now >= running_program.start) {
+                            const p = now - running_program.start;
+                            t = running_program.a + running_program.d * easing(p / running_program.duration);
+                            tick(t, 1 - t);
+                        }
+                    }
+                    return !!(running_program || pending_program);
+                });
+            }
+        }
+        return {
+            run(b) {
+                if (is_function(config)) {
+                    wait().then(() => {
+                        // @ts-ignore
+                        config = config();
+                        go(b);
+                    });
+                }
+                else {
+                    go(b);
+                }
+            },
+            end() {
+                clear_animation();
+                running_program = pending_program = null;
+            }
+        };
     }
 
     function get_spread_update(levels, updates) {
@@ -1542,37 +1754,69 @@ var app = (function () {
     const user = writable(USER_STORE);
     const recorder = writable(RECORDER_STORE);
 
-    /* src/js/components/Header.svelte generated by Svelte v3.15.0 */
+    function fade(node, { delay = 0, duration = 400, easing = identity }) {
+        const o = +getComputedStyle(node).opacity;
+        return {
+            delay,
+            duration,
+            easing,
+            css: t => `opacity: ${t * o}`
+        };
+    }
 
+    /* src/js/components/Header.svelte generated by Svelte v3.15.0 */
     const file = "src/js/components/Header.svelte";
 
-    // (18:2) {#if photo}
+    // (21:2) {#if photo}
     function create_if_block$1(ctx) {
+    	let figure;
     	let img;
     	let img_src_value;
+    	let figure_transition;
+    	let current;
 
     	const block = {
     		c: function create() {
+    			figure = element("figure");
     			img = element("img");
     			if (img.src !== (img_src_value = ctx.photo)) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", ctx.name);
-    			attr_dev(img, "class", "svelte-1eijwst");
-    			add_location(img, file, 18, 4, 281);
+    			add_location(img, file, 22, 6, 383);
+    			attr_dev(figure, "class", "svelte-usidtf");
+    			add_location(figure, file, 21, 4, 352);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, img, anchor);
+    			insert_dev(target, figure, anchor);
+    			append_dev(figure, img);
+    			current = true;
     		},
     		p: function update(changed, ctx) {
-    			if (changed.photo && img.src !== (img_src_value = ctx.photo)) {
+    			if (!current || changed.photo && img.src !== (img_src_value = ctx.photo)) {
     				attr_dev(img, "src", img_src_value);
     			}
 
-    			if (changed.name) {
+    			if (!current || changed.name) {
     				attr_dev(img, "alt", ctx.name);
     			}
     		},
+    		i: function intro(local) {
+    			if (current) return;
+
+    			add_render_callback(() => {
+    				if (!figure_transition) figure_transition = create_bidirectional_transition(figure, fade, {}, true);
+    				figure_transition.run(1);
+    			});
+
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			if (!figure_transition) figure_transition = create_bidirectional_transition(figure, fade, {}, false);
+    			figure_transition.run(0);
+    			current = false;
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(img);
+    			if (detaching) detach_dev(figure);
+    			if (detaching && figure_transition) figure_transition.end();
     		}
     	};
 
@@ -1580,7 +1824,7 @@ var app = (function () {
     		block,
     		id: create_if_block$1.name,
     		type: "if",
-    		source: "(18:2) {#if photo}",
+    		source: "(21:2) {#if photo}",
     		ctx
     	});
 
@@ -1593,6 +1837,8 @@ var app = (function () {
     	let h1;
     	let t1;
     	let t2;
+    	let h1_transition;
+    	let current;
     	let if_block = ctx.photo && create_if_block$1(ctx);
 
     	const block = {
@@ -1603,8 +1849,8 @@ var app = (function () {
     			h1 = element("h1");
     			t1 = text("Hello ");
     			t2 = text(ctx.name);
-    			add_location(h1, file, 20, 2, 326);
-    			add_location(header, file, 16, 0, 254);
+    			add_location(h1, file, 25, 2, 442);
+    			add_location(header, file, 19, 0, 325);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1616,28 +1862,52 @@ var app = (function () {
     			append_dev(header, h1);
     			append_dev(h1, t1);
     			append_dev(h1, t2);
+    			current = true;
     		},
     		p: function update(changed, ctx) {
     			if (ctx.photo) {
     				if (if_block) {
     					if_block.p(changed, ctx);
+    					transition_in(if_block, 1);
     				} else {
     					if_block = create_if_block$1(ctx);
     					if_block.c();
+    					transition_in(if_block, 1);
     					if_block.m(header, t0);
     				}
     			} else if (if_block) {
-    				if_block.d(1);
-    				if_block = null;
+    				group_outros();
+
+    				transition_out(if_block, 1, 1, () => {
+    					if_block = null;
+    				});
+
+    				check_outros();
     			}
 
-    			if (changed.name) set_data_dev(t2, ctx.name);
+    			if (!current || changed.name) set_data_dev(t2, ctx.name);
     		},
-    		i: noop,
-    		o: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(if_block);
+
+    			add_render_callback(() => {
+    				if (!h1_transition) h1_transition = create_bidirectional_transition(h1, fade, { delay: 1000 }, true);
+    				h1_transition.run(1);
+    			});
+
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(if_block);
+    			if (!h1_transition) h1_transition = create_bidirectional_transition(h1, fade, { delay: 1000 }, false);
+    			h1_transition.run(0);
+    			current = false;
+    		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(header);
     			if (if_block) if_block.d();
+    			if (detaching && h1_transition) h1_transition.end();
     		}
     	};
 
@@ -3569,7 +3839,7 @@ var app = (function () {
     exports.validateCallback = validateCallback;
     exports.validateContextObject = validateContextObject;
     exports.validateNamespace = validateNamespace;
-    //# sourceMappingURL=index.cjs.js.map
+
     });
 
     unwrapExports(index_cjs);
@@ -3831,7 +4101,6 @@ var app = (function () {
             inst.logLevel = level;
         });
     }
-    //# sourceMappingURL=index.esm.js.map
 
     var index_esm = /*#__PURE__*/Object.freeze({
         __proto__: null,
@@ -4414,7 +4683,7 @@ var app = (function () {
 
     exports.default = firebase;
     exports.firebase = firebase;
-    //# sourceMappingURL=index.cjs.js.map
+
     });
 
     var firebase = unwrapExports(index_cjs$1);
@@ -4779,8 +5048,6 @@ var app = (function () {
     wg,[V("providerId")]);Z(a,"PhoneAuthProvider",Tg,[Dn()]);Z(a,"RecaptchaVerifier",wn,[X(V(),Cn(),"recaptchaContainer"),W("recaptchaParameters",!0),En()]);Z(a,"ActionCodeURL",qf,[]);firebase.INTERNAL.registerService("auth",function(b,c){b=new Km(b);c({INTERNAL:{getUid:t(b.getUid,b),getToken:t(b.cc,b),addAuthTokenListener:t(b.Wb,b),removeAuthTokenListener:t(b.Ec,b)}});return b},a,function(b,c){if("create"===b)try{c.auth();}catch(d){}});firebase.INTERNAL.extendNamespace({User:Q});}else throw Error("Cannot find the firebase namespace; be sure to include firebase-app.js before this library.");
     })();}).apply(typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : typeof window !== 'undefined' ? window : {});
 
-    //# sourceMappingURL=auth.esm.js.map
-
     var commonjsGlobal$1 = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
     var g,goog=goog||{},k=commonjsGlobal$1;function m(a){return "string"==typeof a}function aa(a){return "number"==typeof a}function n(a,b){a=a.split(".");b=b||k;for(var c=0;c<a.length;c++)if(b=b[a[c]],null==b)return null;return b}function ba(){}
@@ -4870,7 +5137,6 @@ var app = (function () {
     */
     Qd.prototype.createWebChannel=Qd.prototype.a;Y.prototype.send=Y.prototype.Xa;Y.prototype.open=Y.prototype.Wa;Y.prototype.close=Y.prototype.close;Pb.NO_ERROR=0;Pb.TIMEOUT=8;Pb.HTTP_ERROR=6;Qb.COMPLETE="complete";Tb.EventType=L;L.OPEN="a";L.CLOSE="b";L.ERROR="c";L.MESSAGE="d";G.prototype.listen=G.prototype.Aa;X.prototype.listenOnce=X.prototype.Ba;X.prototype.getLastError=X.prototype.Ya;X.prototype.getLastErrorCode=X.prototype.ya;X.prototype.getStatus=X.prototype.T;X.prototype.getStatusText=X.prototype.za;
     X.prototype.getResponseJson=X.prototype.Va;X.prototype.getResponseText=X.prototype.aa;X.prototype.send=X.prototype.ca;var tmp={createWebChannelTransport:Td,ErrorCode:Pb,EventType:Qb,WebChannel:Tb,XhrIo:X};
-    //# sourceMappingURL=index.esm.js.map
 
     var index_cjs$3 = createCommonjsModule(function (module, exports) {
 
@@ -28151,7 +28417,7 @@ var app = (function () {
     registerFirestore(firebase);
 
     exports.registerFirestore = registerFirestore;
-    //# sourceMappingURL=index.cjs.js.map
+
     });
 
     unwrapExports(index_cjs$3);
@@ -28784,10 +29050,10 @@ var app = (function () {
     			t0 = text(t0_value);
     			t1 = space();
     			create_component(counter.$$.fragment);
-    			attr_dev(button, "class", "svelte-adujy3");
+    			attr_dev(button, "class", "svelte-v4yyb1");
     			toggle_class(button, "active", ctx.$recorder.status === "STARTED");
-    			add_location(button, file$3, 99, 2, 2042);
-    			add_location(section, file$3, 98, 0, 2030);
+    			add_location(button, file$3, 106, 2, 2121);
+    			add_location(section, file$3, 105, 0, 2109);
     			dispose = listen_dev(button, "click", ctx.toggleRecord, false, false, false);
     		},
     		l: function claim(nodes) {
@@ -28839,10 +29105,6 @@ var app = (function () {
     	return block;
     }
 
-    function setDataStore(data) {
-    	recorder.set(data);
-    }
-
     function instance$5($$self, $$props, $$invalidate) {
     	let $recorder;
     	validate_store(recorder, "recorder");
@@ -28862,7 +29124,7 @@ var app = (function () {
     	}
 
     	async function start() {
-    		setDataStore({ ...$recorder, status: "STARTED" });
+    		recorder.set({ ...$recorder, status: "STARTED" });
 
     		try {
     			const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -28876,14 +29138,14 @@ var app = (function () {
 
     	function hasMediaData(evt) {
     		const file = evt.data;
-    		setDataStore({ ...$recorder, file });
+    		recorder.set({ ...$recorder, file });
     		dispatch("finish", file);
     		setTimeout(stopBrowserMic, 1000);
     	}
 
     	function stop() {
     		mediaRecorder.stop();
-    		setDataStore({ ...$recorder, status: "STOP" });
+    		recorder.set({ ...$recorder, status: "STOP" });
     	}
 
     	function stopBrowserMic() {
