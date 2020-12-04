@@ -27,7 +27,7 @@
 
   function declineSound() {
     recorder.set(RECORDER_STORE);
-    navigate('recorder');
+    navigate('/');
   }
 </script>
 

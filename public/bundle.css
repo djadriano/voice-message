@@ -1,7 +1,7 @@
-main.svelte-1tv9nbq{position:relative}
+body{margin:0;padding:0}main.svelte-1kivo51{position:relative;height:100%;display:flex;justify-content:center;align-items:center}
 .recorder.svelte-27dquv{position:relative}
-figure.svelte-usidtf{width:100px;height:100px;border:1px solid}
-button.svelte-v4yyb1{background:green;color:white;border:0}button.active.svelte-v4yyb1{background:red;animation:svelte-v4yyb1-foo 250ms infinite}@keyframes svelte-v4yyb1-foo{from{background:green}to{background:red}}
-time.svelte-1yff1od{border:1px solid}
+img.svelte-1eijwst{width:100px;height:100px}
+button.svelte-53cf13{color:white;border:0;background:transparent}.icon.svelte-53cf13{width:50px;height:50px}.icon.active.svelte-53cf13{animation:svelte-53cf13-pulse 250ms infinite}@keyframes svelte-53cf13-pulse{from{fill:black}to{fill:red}}
+time.svelte-w3y8xr{display:block;text-align:center}
 
 /*# sourceMappingURL=bundle.css.map */

@@ -1,6 +1,7 @@
 <style>
   time {
-    border: 1px solid;
+    display: block;
+    text-align: center;
   }
 </style>
 
@@ -8,7 +9,7 @@
   import { createEventDispatcher } from 'svelte';
 
   const dispatch = createEventDispatcher();
-  const maxRecorderSeconds = 5;
+  const maxRecorderSeconds = 30;
   const intervalTime = 1000;
 
   export let recorderStatus;
